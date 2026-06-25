@@ -1,0 +1,5 @@
+.env
+*.key
+*.pem
+wireguard/wg0.conf
+data/
