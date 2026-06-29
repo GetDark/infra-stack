@@ -1,66 +1,111 @@
+[English](#english) | [Русский](#русский)
+
+---
+
+<a name="english"></a>
 # infra-stack
 
-Internal team infrastructure on Docker Compose: **Mattermost** (team chat) + **PostgreSQL** + **nginx** reverse proxy with SSL + **WireGuard** VPN + automated backups.
+Self-hosted team infrastructure: Mattermost (team chat) + PostgreSQL + nginx (SSL termination) + WireGuard VPN — all in Docker Compose.
 
-## Services
+## Stack
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Mattermost | 8065 (internal) | Team messenger |
-| PostgreSQL | internal | Mattermost database |
-| nginx | 80, 443 | Reverse proxy + SSL termination |
-| WireGuard | 51820 UDP | VPN access to internal services |
+| Service | Image | Port |
+|---------|-------|------|
+| Mattermost | `mattermost/mattermost-team-edition:9.10` | 8065 (internal) |
+| PostgreSQL | `postgres:16-alpine` | internal |
+| nginx | `nginx:1.27-alpine` | 80, 443 |
+| WireGuard | — | setup via script |
+
+All services communicate over an internal Docker bridge network. nginx handles SSL and proxies to Mattermost.
 
 ## Quick Start
 
 ```bash
-# 1. Copy and fill env
+git clone https://github.com/GetDark/infra-stack.git
+cd infra-stack
+
 cp .env.example .env
-vim .env  # set POSTGRES_PASSWORD and SITE_URL
+nano .env  # set POSTGRES_PASSWORD and SITE_URL
 
-# 2. Obtain SSL cert (before starting nginx)
-certbot certonly --standalone -d chat.yourdomain.com
-
-# 3. Update nginx config
-sed -i 's/chat.yourdomain.com/YOUR_DOMAIN/g' nginx/conf.d/mattermost.conf
-
-# 4. Start stack
 docker compose up -d
-
-# 5. Check health
-docker compose ps
-curl https://chat.yourdomain.com/api/v4/system/ping
 ```
 
 ## WireGuard VPN
 
 ```bash
-# Setup server
 bash wireguard/setup.sh
-
-# Copy config and edit
 cp wireguard/wg0.conf.example /etc/wireguard/wg0.conf
-vim /etc/wireguard/wg0.conf  # replace keys
-
-# Enable
-systemctl enable --now wg-quick@wg0
+# edit wg0.conf with your keys, then:
+wg-quick up wg0
 ```
 
-Peers connect over VPN and access internal services (Mattermost at 10.0.0.1:8065) without exposing ports publicly.
-
-## Backup
+## Backup & Restore
 
 ```bash
-# Manual
-bash scripts/backup.sh
-
-# Cron (daily 03:00)
-echo "0 3 * * * cd /opt/infra-stack && bash scripts/backup.sh" | crontab -
-
-# Restore from latest postgres dump
-bash scripts/restore.sh
+bash scripts/backup.sh    # creates backup archive
+bash scripts/restore.sh   # restores from archive
 ```
 
-## nginx websocket support
+## Environment Variables
 
-The nginx config handles Mattermost websocket connections (`/api/v*/websocket`) with `Upgrade` headers and `proxy_read_timeout 86400` — required for real-time messaging.
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_PASSWORD` | **Required.** Database password |
+| `POSTGRES_USER` | DB user (default: `mmuser`) |
+| `POSTGRES_DB` | DB name (default: `mattermost`) |
+| `SITE_URL` | Mattermost public URL (e.g. `https://chat.example.com`) |
+
+---
+
+<a name="русский"></a>
+# infra-stack
+
+Самостоятельно размещаемая командная инфраструктура: Mattermost (командный чат) + PostgreSQL + nginx (SSL) + WireGuard VPN — всё в Docker Compose.
+
+## Стек
+
+| Сервис | Образ | Порт |
+|--------|-------|------|
+| Mattermost | `mattermost/mattermost-team-edition:9.10` | 8065 (внутренний) |
+| PostgreSQL | `postgres:16-alpine` | внутренний |
+| nginx | `nginx:1.27-alpine` | 80, 443 |
+| WireGuard | — | настройка через скрипт |
+
+Все сервисы общаются через внутреннюю Docker bridge-сеть. nginx терминирует SSL и проксирует запросы на Mattermost.
+
+## Быстрый старт
+
+```bash
+git clone https://github.com/GetDark/infra-stack.git
+cd infra-stack
+
+cp .env.example .env
+nano .env  # задать POSTGRES_PASSWORD и SITE_URL
+
+docker compose up -d
+```
+
+## WireGuard VPN
+
+```bash
+bash wireguard/setup.sh
+cp wireguard/wg0.conf.example /etc/wireguard/wg0.conf
+# отредактировать wg0.conf со своими ключами, затем:
+wg-quick up wg0
+```
+
+## Резервное копирование
+
+```bash
+bash scripts/backup.sh    # создаёт архив резервной копии
+bash scripts/restore.sh   # восстанавливает из архива
+```
+
+## Переменные окружения
+
+| Переменная | Описание |
+|------------|----------|
+| `POSTGRES_PASSWORD` | **Обязательна.** Пароль базы данных |
+| `POSTGRES_USER` | Пользователь БД (по умолчанию: `mmuser`) |
+| `POSTGRES_DB` | Имя БД (по умолчанию: `mattermost`) |
+| `SITE_URL` | Публичный URL Mattermost (например `https://chat.example.com`) |
